@@ -1,44 +1,42 @@
 defmodule WardrikLua.Sandbox do
   @moduledoc """
-  Runs code an agent wrote, under limits, with no way out to the node: a
-  sandbox over [lua](https://hexdocs.pm/lua), a Lua 5.3 VM written in pure
-  Elixir.
+  Runs Lua code under limits, with no access to the node.
+
+  Built on [lua](https://hexdocs.pm/lua), a Lua 5.3 VM written in Elixir.
 
       WardrikLua.Sandbox.run("return ('%d apples'):format(3)", WardrikLua.Sandbox.Limits.new())
       #=> {:ok, "3 apples"}
 
-  `run/2` is the way in. It asks `check/1` whether the code can run at all,
-  then evaluates it in a task of its own under `t:WardrikLua.Sandbox.Limits.t/0`,
-  and returns the value the code produced as data a turn can put in front of
-  a model. Failure is a sentence, because the model is what reads it.
+  Errors are returned as a sentence, since a model reads them.
 
-  The VM has no way to reach the node: `io`, `file`, `os.execute`, `os.exit`,
-  `os.getenv`, `package`, `require`, `load`, `dofile`, `print` and `debug`
-  raise when called. `string`, `table`, `math`, `utf8` and the rest of `os`
-  are there.
+  ## Globals
 
-  A chunk hands back what it returns: one value as itself, several as a list,
-  none as `nil`. A table comes back as a map, or as a list when its keys are
-  exactly 1..n. Object keys become strings; keys that collide after conversion
-  are refused. Functions, cyclic tables and strings that are not UTF-8 cannot
-  be returned as JSON and are refused too.
+  `string`, `table`, `math`, `utf8` and the safe parts of `os` are available. `io`, `file`,
+  `os.execute`, `os.exit`, `os.getenv`, `package`, `require`, `load`, `dofile`, `print` and `debug`
+  raise when called.
 
-  `WardrikLua.Sandbox.Runner` carries the deadline and the memory budget, and
-  `evaluate/2` runs in the process it has already bounded. The VM enforces
-  the rest of `t:WardrikLua.Sandbox.Limits.t/0` itself, and reports each as a
-  sentence: a step budget spent, a call stack too deep, a string too large to
-  build.
+  ## Return values
+
+    * No value returns `nil`, one value returns itself, several return a list.
+    * A table returns a map, or a list when its keys are exactly `1..n`.
+    * Map keys become strings. Keys that collide after conversion are an error.
+    * Functions, cyclic tables and strings that aren't valid UTF-8 are an error.
+
+  ## Limits
+
+  `WardrikLua.Sandbox.Runner` enforces the deadline and memory budget. The VM enforces the step
+  budget and call depth itself. See `WardrikLua.Sandbox.Limits`.
   """
 
   alias WardrikLua.Sandbox.Limits
   alias WardrikLua.Sandbox.Runner
 
-  @typedoc "What an evaluation produced, or why it produced nothing."
+  @typedoc "The value the code returned, or why it failed."
   @type result() :: {:ok, term()} | {:error, String.t()}
 
   @max_code_bytes 64 * 1024
 
-  @doc "Checks `code`, then runs it under `limits`."
+  @doc "Checks `code` with `check/1`, then evaluates it in a task of its own under `limits`."
   @spec run(String.t(), Limits.t()) :: result()
   def run(code, %Limits{} = limits) do
     with :ok <- check(code) do
@@ -46,7 +44,11 @@ defmodule WardrikLua.Sandbox do
     end
   end
 
-  @doc "Whether this code can run, without running it."
+  @doc """
+  Returns `:ok` if `code` can be run, without running it.
+
+  Returns an error if `code` isn't a string or is longer than 64 KB.
+  """
   @spec check(term()) :: :ok | {:error, String.t()}
   def check(code) when not is_binary(code) do
     {:error, "code must be a string, got: #{inspect(code)}"}
@@ -60,7 +62,11 @@ defmodule WardrikLua.Sandbox do
   # compilation and execution run under the caller's resource limits.
   def check(_code), do: :ok
 
-  @doc "Runs `code` in the caller's process and returns the value it produced."
+  @doc """
+  Evaluates `code` in the calling process and returns its value.
+
+  Enforces only the limits the VM checks. Use `run/2` for the deadline and memory budget.
+  """
   @spec evaluate(String.t(), Limits.t()) :: result()
   def evaluate(code, %Limits{} = limits) do
     {results, _lua} = Lua.eval!(vm(limits), code)

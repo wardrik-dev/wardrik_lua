@@ -1,19 +1,25 @@
 defmodule WardrikLua do
   @moduledoc """
-  Lua 5.3 for agents: the `run_lua` tool, which runs code an agent writes in a sealed sandbox and
-  hands back the value. It's how an agent does work no other tool covers: arithmetic over numbers
-  it holds, reshaping a result, a loop, or the time now, with `os.time` and `os.date`.
+  Lua 5.3 for agents.
 
-      WardrikCore.start_agent(agent_id: "acme/triage", model: "...", capabilities: [WardrikLua])
+  Gives agents the `run_lua` tool, which runs code in a sealed sandbox and returns the value. Use it
+  when agents need exact answers they'd otherwise work out in their heads: arithmetic, reshaping a
+  result, a loop, or the current time with `os.time` and `os.date`.
 
-  The VM is written in Elixir and reaches nothing outside itself: no files, no network, no
-  environment, and nothing else the agent has. Each run is checked, then evaluated in a task of its
-  own under `WardrikLua.Sandbox.Limits`: a deadline, a memory budget, a step budget and a call
-  depth. Give `:limits` to change them:
+      WardrikCore.start_agent(
+        agent_id: "acme/triage",
+        model: "anthropic:claude-haiku-4-5",
+        capabilities: [WardrikLua]
+      )
 
-      {WardrikLua, limits: [timeout_ms: :timer.seconds(5)]}
+  The VM can't reach files, the network, the environment, or anything else the agent has. See
+  `WardrikLua.Sandbox`.
 
-  Reach for this when agents need exact answers they'd otherwise work out in their heads.
+  ## Options
+
+    * `:limits` - bounds for each run. See `WardrikLua.Sandbox.Limits`.
+
+          {WardrikLua, limits: [timeout_ms: :timer.seconds(5)]}
   """
 
   @behaviour WardrikCore.Capability
