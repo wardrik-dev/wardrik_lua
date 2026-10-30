@@ -28,7 +28,7 @@ In [Wardrik](https://hexdocs.pm/wardrik), offer it by name. A definition then na
 `tools`:
 
 ```elixir
-config :my_app, MyApp.Wardrik, capabilities: [run_lua: WardrikLua]
+config :my_app, MyApp.AgentRuntime, capabilities: [run_lua: WardrikLua]
 ```
 
 The daemon already offers it as `run_lua`.
